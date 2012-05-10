@@ -14,4 +14,4 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from keystone.contrib.mini_crud.core import *
+from keystone_extensions.contrib.user_crud.core import *

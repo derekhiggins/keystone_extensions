@@ -36,7 +36,8 @@ class UserController(object):
         try:
             # Get the User id from the token id
             token_id = req.headers.get("X-Auth-Token")
-            user = self.token_manager_api.get_token(context=req, token_id=token_id)
+            user = self.token_manager_api.get_token(context=req,
+                token_id=token_id)
             user_id = user["user"]["id"]
 
             params = req.environ.get('openstack.params', {})
@@ -55,7 +56,8 @@ class UserController(object):
                 "code": 403, "title": "Not Authorized"}})
 
         try:
-            user_ref = self.identity_manager_api.update_user(req, user_id, params["user"])
+            user_ref = self.identity_manager_api.update_user(req, user_id,
+                params["user"])
         except:
             return render_response(status=(500,"Internal Server Error"),
                 body={"error": {"message": "Unexpected Error", "code": 500,
