@@ -19,51 +19,36 @@ from keystone.common.wsgi import render_response
 from keystone.token import Manager as TokenManager
 from keystone.identity import Manager as IdentityManager
 
-import webob
-import webob.dec
-import webob.exc
+def sanitize_dict(dict_to_sanitize, keys_allowed):
+    sanitized_dict = {}
+    for k,v in dict_to_sanitize.items():
+        if k in keys_allowed:
+            sanitized_dict[k] = v
+    return sanitized_dict
 
-
-class UserController(object):
-
+class UserController(wsgi.Application):
     def __init__(self):
         self.identity_manager_api = IdentityManager()
         self.token_manager_api = TokenManager()
 
-    @webob.dec.wsgify
-    def __call__(self, req):
+    def set_user_password(self, context, user_id, user):
+        token_id = context.get("token_id")
 
-        try:
-            # Get the User id from the token id
-            token_id = req.headers.get("X-Auth-Token")
-            user = self.token_manager_api.get_token(context=req,
-                token_id=token_id)
-            user_id = user["user"]["id"]
+        user_ref = self.token_manager_api.get_token(context=context,
+            token_id=token_id)
+        user_id_from_token = user_ref["user"]["id"]
 
-            params = req.environ.get('openstack.params', {})
-
-            req_user_id = params["user"]["id"]
-            req_user_passwd = params["user"]["password"]
-        except:
-            return render_response(status=(500,"Internal Server Error"),
-                body={"error": {"message": "Unexpected Error", "code": 500,
-                "title": "Internal Server Error"}})
-
-        # test if the request is trying to change somebody elses password
-        if user_id != req_user_id:
+        if user_id_from_token != user_id:
             return render_response(status=(403,"Not Authorized"),
                 body={"error": {"message": "You are not authorized",
                 "code": 403, "title": "Not Authorized"}})
 
-        try:
-            user_ref = self.identity_manager_api.update_user(req, user_id,
-                params["user"])
-        except:
-            return render_response(status=(500,"Internal Server Error"),
-                body={"error": {"message": "Unexpected Error", "code": 500,
-                "title": "Internal Server Error"}})
+        update_dict = sanitize_dict(user, ["id", "password"])
 
-        return render_response(status=(200,"OK"), body={"user":user_ref})
+        self.identity_manager_api.update_user(context, user_id, update_dict)
+
+        return render_response(status=(200,"OK"), body={"user":update_dict})
+
 
 class CrudExtension(wsgi.ExtensionRouter):
     """
@@ -78,8 +63,10 @@ class CrudExtension(wsgi.ExtensionRouter):
         # COMPAT(diablo): the copy with no OS-KSADM is from diablo
         mapper.connect('/users/{user_id}/password',
                     controller=user_controller,
+                    action='set_user_password',
                     conditions=dict(method=['PUT']))
         mapper.connect('/users/{user_id}/OS-KSADM/password',
                     controller=user_controller,
+                    action='set_user_password',
                     conditions=dict(method=['PUT']))
 
